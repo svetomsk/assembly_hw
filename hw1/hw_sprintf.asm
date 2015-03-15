@@ -24,33 +24,41 @@ itoa:
     push ebx
     ; move argument value in eax
     mov eax, [ebp]
-    ; base for division
-    mov ebx, 10
-    ; save old esp value for reverse
-    mov ecx, esp
-    dec esp
-.div_circle:
-    ; clean edx for division
-    xor edx, edx
-    div ebx
-    ; shift for character value
-    ; and put
-    add edx, '0'
-    ; put character to stask
-    ; and move pointer of esp
-    mov byte [esp], dl
-    dec esp
-    cmp eax, 0
-    jne .div_circle
-    inc esp
-.reverse_circle:
-    ; moves character from stask to out buffer
-    mov dl, byte [esp]
-    mov byte [edi], dl
-    inc edi
-    inc esp
-    cmp esp, ecx
-    jne .reverse_circle
+    ; check for signed negative value
+    test eax, 0x80000000
+    jne .signed_neg
+    jmp .main_process
+    .signed_neg:
+        neg eax
+
+    .main_process:
+        ; base for division
+        mov ebx, 10
+        ; save old esp value for reverse
+        mov ecx, esp
+        dec esp
+    .div_circle:
+        ; clean edx for division
+        xor edx, edx
+        div ebx
+        ; shift for character value
+        ; and put
+        add edx, '0'
+        ; put character to stask
+        ; and move pointer of esp
+        mov byte [esp], dl
+        dec esp
+        cmp eax, 0
+        jne .div_circle
+        inc esp
+    .reverse_circle:
+        ; moves character from stask to out buffer
+        mov dl, byte [esp]
+        mov byte [edi], dl
+        inc edi
+        inc esp
+        cmp esp, ecx
+        jne .reverse_circle
 
     pop ebx
     pop edx
