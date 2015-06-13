@@ -3,15 +3,15 @@ global itoa
 
 section .text
 
-plus_flag    equ   1 << 0 ; always print sign before number
-space_flag   equ   1 << 1 ; always print space before number
-align_flag   equ   1 << 2 ; align left
-zero_flag    equ   1 << 3 ; fill 0 up to min width
-width_flag   equ   1 << 4 ; 
-percent_flag equ   1 << 5 ; if percent sign is present
-negative_flag equ  1 << 6 ; if number if negative
+plus_flag    equ   1 << 0 ; always print sign before number 1
+space_flag   equ   1 << 1 ; always print space before number 2
+align_flag   equ   1 << 2 ; align left 4 
+zero_flag    equ   1 << 3 ; fill 0 up to min width 8
+width_flag   equ   1 << 4 ; 16
+percent_flag equ   1 << 5 ; if percent sign is present 32
+negative_flag equ  1 << 6 ; if number if negative 64
 
-; void sitoa(char * buf, int value, int flags)
+; void sitoa(char * buf, int value, int flags, ...)
 ; eid = pointer to out buffer
 ; eax = value of be stored in buffer
 ; ebp = flags value
@@ -25,118 +25,141 @@ itoa:
     mov edi, [esp + 20] ; edi = buf
     mov eax, [esp + 24] ; eax = value
     mov ebp, [esp + 28] ; ebp = flags
-    
-    mov ebx, 10 ; ebx = divisor
-    mov ecx, esp ; save old esp value
 
-    .div_circle: ; div until eax != 0
-        xor edx, edx ; edx = 0
-        div ebx; eax / ebx
-        add edx, '0'; edx = '0' + last digit of eax
-        dec esp
-        mov byte [esp], dl
-        cmp eax, 0
-        jne .div_circle
+    test eax, 0x80000000 ; check for negative value
+    je .main
+    neg eax
+    or ebp, negative_flag
+    or ebp, plus_flag
+    xor ebp, space_flag
 
-    .reverse_circle: ; push to buffer until esp != old esp
-        xor eax, eax; eax = 0
-        mov al, byte [esp]; eax = current digit of value     
-        inc esp
-        mov byte [edi], al ; edi[i] = current digit of value
+    .main:
+        mov ebx, 10 ; ebx = divisor
+        mov ecx, esp ; save old esp value
+
+        .div_circle: ; div until eax != 0
+            xor edx, edx ; edx = 0
+            div ebx; eax / ebx
+            add edx, '0'; edx = '0' + last digit of eax
+            dec esp
+            mov byte [esp], dl
+            cmp eax, 0
+            jne .div_circle
+
+        
+        .test_width: ; if width is set
+            xor ebx, ebx ; clear register for width
+            test ebp, width_flag
+            jz .sub_length
+            mov ebx, [ecx + 32] ;ebx = width
+
+        .sub_length:
+            sub ecx, esp ; ecx = length of number
+
+        .test_zero:
+            test ebp, zero_flag ; if (ebp contains zero_flag)
+            jz .test_sign ; else
+
+            test ebp, plus_flag ; if(ebp contains plus_flag)
+            jz .without_sign ; else
+            jnz .with_sign
+
+        .without_sign:
+            cmp ecx, ebx
+            jge .test_sign
+            jl .with_space
+
+        .with_sign:
+            dec ebx
+            cmp ecx, ebx
+            jge .test_sign
+            jl .push_zeros
+
+        .with_space:
+            test ebp, space_flag
+            jz .push_zeros
+            dec ebx
+
+        .push_zeros:
+            dec esp
+            mov byte [esp], '0'
+            inc ecx
+            cmp ecx, ebx
+            jl .push_zeros
+            
+
+        .test_sign:
+            test ebp, plus_flag ; if(ebp contains plus_flag)
+            jz .test_space ; else 
+
+        .test_neg:
+            test ebp, negative_flag ; if(ebp contains negative_flag)
+            jz .push_plus ; else
+            dec esp ; push '-' sign 
+            mov byte [esp], '-'
+            inc ecx
+            jmp .test_align
+
+        .push_plus: ; push '+' sign
+            dec esp
+            mov byte [esp], '+'
+            inc ecx
+            jmp .test_align
+
+        .test_space: 
+            test ebp, space_flag ; if(ebp contains space_flag)
+            jz .test_align ; else
+            dec esp ; push ' ' sign
+            mov byte [esp], ' '
+            inc ecx
+
+        .test_align: 
+            test ebp, align_flag
+            jnz .reverse_circle
+
+        cmp ecx, ebx ; if we got smth to push
+        jge .reverse_circle
+
+        .push_spaces_before:
+            dec esp
+            mov byte [esp], ' '
+            inc ecx
+            cmp ecx, ebx
+            jne .push_spaces_before
+
+        .reverse_circle: ; push to buffer until esp != old esp
+            xor eax, eax; eax = 0
+            mov al, byte [esp]; eax = current digit of value     
+            inc esp
+            mov byte [edi], al ; edi[i] = current digit of value
+            inc edi
+            dec ecx
+            dec ebx
+            cmp ecx, 0
+            jne .reverse_circle
+
+        test ebp, align_flag
+        jz .finally
+        cmp ebx, 0
+        jle .finally
+
+        .push_spaces_after:
+            mov byte [edi], ' '
+            inc edi
+            dec ebx
+            cmp ebx, 0
+            jne .push_spaces_after
+
+    .finally:    
+        mov byte [edi], 0
         inc edi
-        cmp ecx, esp
-        jne .reverse_circle
+        ; return registers back
+        pop ebx
+        pop edi
+        pop esi
+        pop ebp
 
-    ; return registers back
-    pop ebx
-    pop edi
-    pop esi
-    pop ebp
-
-    ret
-
-; ebp - pointer to argument int
-; edi - pointer to out buffer
-; use:
-; eax for integer store
-; edx for division
-; ebx for division
-; ecx for esp save state
-
-; itoa:
-;     ; save registers used in fucntion
-;     push eax
-;     push ebx
-;     ; move argument value in eax
-;     mov eax, [ebp]
-;     ; check for signed negative value
-;     test eax, 0x80000000
-;     jne .signed_neg
-;     jmp .main_process
-;     .signed_neg:
-;         neg eax
-;         or edx, negative_flag
-
-;     ; save edx
-;     push edx
-;     .main_process:
-;         ; base for division
-;         mov ebx, 10
-;         ; save old esp value for reverse
-;         mov ecx, esp
-;         dec esp
-
-;     .div_circle:
-;         ; clean edx for division
-;         xor edx, edx
-;         div ebx
-;         ; shift for character value
-;         ; and put
-;         add edx, '0'
-;         ; put character to stask
-;         ; and move pointer of esp
-;         mov byte [esp], dl
-;         dec esp
-;         cmp eax, 0
-;         jne .div_circle
-
-;     ; ecx = old esp value
-;     ; move to ecx amount of signs in stack
-;     sub ecx, esp
-;     ; pop edx to get flags values
-;     pop edx
-;     ; check for plus_flag
-;     ; and push sign to stack if necessary
-;     test edx, plus_flag
-;     jz .after
-;     ; check for negative sign
-;     ; and put appropriate sign
-;     test edx, negative_flag
-;     jz .put_plus
-;     mov byte[esp], '-'
-;     jmp .after
-
-;     .put_plus:
-;         mov byte [esp], '+'
-;         dec esp
-;         inc ecx
-
-;     .after:        
-;         inc esp
-
-;     .reverse_circle:
-;         ; moves character from stask to out buffer
-;         mov dl, byte [esp]
-;         mov byte [edi], dl
-;         inc edi
-;         inc esp
-;         dec ecx
-;         cmp ecx, 0
-;         jne .reverse_circle
-
-;     pop ebx
-;     pop eax
-;     ret
+        ret
 
 ; void hw_sprintf(char* out, char* format, arguments...)
 ; registers in use:

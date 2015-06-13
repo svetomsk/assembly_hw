@@ -1,6 +1,6 @@
 all:
 	yasm -f elf32 -g dwarf2 hw_sprintf.asm -o hw_sprintf.o
-	gcc -g -c test.c -o test.o -m32
+	gcc -std=c99 -g -c test.c -o test.o -m32
 	gcc  -o hw1 hw_sprintf.o test.o  -m32
 
 clean:
