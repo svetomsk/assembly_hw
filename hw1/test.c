@@ -40,15 +40,32 @@ int cmp(char * a, char * b, int length) {
 	return 1;
 }
 
-void test(int value, int flags, int width, char * args) {
+void test_itoa(int value, int flags, int width, char * args) {
 	char buf[100];
 	itoa(buf, value, flags, width);
+	char buf1[100];
+	sprintf(buf1, args, value);
+	buf[strlen(buf1)] = 0;
+	printf("\"%s\" vs ", buf);
+	printf("\"%s\" ", buf1);
+	if(cmp(buf, buf1, width) == 1) {
+		green("OK");
+	} else {
+		correct = 0;
+		red("FAIL");
+	}
+	printf("----\n");
+}
+
+void test_sprintf(int value, char * args) {
+	char buf[100];
+	sprintf(buf, args, value);
 	buf[strlen(buf)] = 0;
 	printf("\"%s\" vs ", buf);
 	char buf1[100];
 	sprintf(buf1, args, value);
 	printf("\"%s\" ", buf1);
-	if(cmp(buf, buf1, width) == 1) {
+	if(cmp(buf, buf1, strlen(buf1)) == 1) {
 		green("OK");
 	} else {
 		correct = 0;
@@ -111,7 +128,7 @@ void construct_string(int flags, char s[], int width) {
 	s[cnt] = 0;
 }
 
-void rec_test(int flags, int cur, int depth, int max_depth) {
+void rec_test_itoa(int flags, int cur, int depth, int max_depth) {
 	if(depth == max_depth) {
 		char buf[100];
 		num_to_str(buf, flags);
@@ -122,54 +139,81 @@ void rec_test(int flags, int cur, int depth, int max_depth) {
 		}
 
 		construct_string(flags, buf, width);
-		printf("STRING = %s\n", buf);
-		test(1234, flags, width, buf);
-		test(-4567, flags, width, buf);
+		test_itoa(1234, flags, width, buf);
+		test_itoa(-4567, flags, width, buf);
 		return;
 	}
 	for(int i = cur + 1; i < 5; i++) {
 		if(((flags & ZERO) && i == 2) || ((flags & ALIGN) && i == 3)) {
 			continue;
 		}
-		rec_test(flags | args[i], i, depth + 1, max_depth);
+		rec_test_itoa(flags | args[i], i, depth + 1, max_depth);
+	}
+}
+
+void rec_test_sprintf(int flags, int cur, int depth, int max_depth) {
+	if(depth == max_depth) {
+		char buf[100];
+		num_to_str(buf, flags);
+		blue(buf);
+		int width = 4;
+		if(flags & WIDTH) {
+			width = 10;
+		}
+
+		construct_string(flags, buf, width);
+		test_sprintf(1234, buf);
+		test_sprintf(-4567, buf);
+	}
+	for(int i = cur + 1; i < 5; i++) {
+		rec_test_sprintf(flags | args[i], i, depth + 1, max_depth);
 	}
 }
 
 void do_itoa_testing() {
 	blue("SINGLE FLAG TESTS");
-	black("========================");
-	rec_test(0, -1, 0, 1);
-	black("========================");
+	rec_test_itoa(0, -1, 0, 1);
 
 	blue("TWO FLAGS TESTS");
-	black("========================");
-	rec_test(0, -1, 0, 2);
-	black("========================");
+	rec_test_itoa(0, -1, 0, 2);
 
 	blue("THREE FLAGS TESTS");
-	black("========================");
-	rec_test(0, -1, 0, 3);
-	black("========================");
+	rec_test_itoa(0, -1, 0, 3);
 
 	blue("FOUR FLAGS TESTS");
-	black("========================");
-	rec_test(0, -1, 0, 4);
-	black("========================");
+	rec_test_itoa(0, -1, 0, 4);
+}
 
-	if(correct == 1) {
-		green("ALL TESTS PASSED");
-	} else {
-		red("TESTS FAILED");
-	}
+void do_sprintf_testing() {
+	blue("SIGNLE FLAG TEST");
+	rec_test_sprintf(0, -1, 0, 1);
+
+	blue("TWO FLAGS TESTS");
+	rec_test_sprintf(0, -1, 0, 2);
+
+	blue("THREE FLAGS TESTS");
+	rec_test_sprintf(0, -1, 0, 3);
+
+	blue("FOUR FLAGS TESTS");
+	rec_test_sprintf(0, -1, 0, 4);
+
 }
 
 int main() {
-	args[0] = 1;
-	args[1] = 2;
-	args[2] = 4;
-	args[3] = 8;
-	args[4] = 16;
-	do_itoa_testing();
+	args[0] = SIGN;
+	args[1] = SPACE;
+	args[2] = ALIGN;
+	args[3] = ZERO;
+	args[4] = WIDTH;
+
+	// do_itoa_testing();
+	// do_sprintf_testing();
+
+	// if(correct) {
+	// 	green("TEST PASSED");
+	// } else {
+	// 	red("TEST FAILED");
+	// }
 
 	// char buf[100];
 	// itoa(buf, 1234, ZERO | WIDTH | SPACE, 10);

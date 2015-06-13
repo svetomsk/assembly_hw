@@ -151,8 +151,8 @@ itoa:
             jne .push_spaces_after
 
     .finally:    
-        mov byte [edi], 0
-        inc edi
+        ; mov byte [edi], 0
+        ; inc edi
         ; return registers back
         pop ebx
         pop edi
@@ -252,9 +252,13 @@ hw_sprintf:
         jne .simple_output
 
     .print_int:
+        push ebx
+        push edx
+        push dword [ebp]
         push edi
-        push ebp
         call itoa
+        add esp, 16 ; clear arguments
+
 
         ; clean flags and move pointer to next
         ; argument
@@ -314,6 +318,8 @@ hw_sprintf:
         cmp cl, 0
         jne .next_character
 
+        mov byte [edi], '0'
+        inc edi
         ; pop callee-save registers
         pop ebx
         pop edi
@@ -353,5 +359,7 @@ hw_sprintf:
 
     ; set zero flag to edx
     .set_zero:
+        test edx, align_flag
+        jnz .parse_flags
         or edx, zero_flag
         jmp .parse_flags
