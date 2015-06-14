@@ -12,6 +12,43 @@ percent_flag equ   1 << 5 ; if percent sign is present 32
 negative_flag equ  1 << 6 ; if number if negative 64
 unsigned_flag equ  1 << 7 ; if value is unsigned
 
+; void reminder(long long int value, int devisor)
+; result: value / 10 in edx : eax; reminder in ecx
+
+reminder:
+    push ebp
+    push esi
+    push edi
+    push ebx
+
+    mov eax, [esp + 20] ; low 32 bits of value
+    mov edx, [esp + 24] ; high 32 bits of value
+    mov ebx, 10 ; ebx= divisor
+
+    mov ecx, eax
+    mov eax, edx
+    xor edx, edx
+    ; 0 : high
+    div ebx ; edx = high % 10 ; eax = high / 10
+    mov edi, eax; edi = high / 10
+
+    mov eax, ecx; eax = low
+    div ebx; edx = low % 10 ; eax = low / 10
+
+    mov ecx, edx ; ecx = reminder
+    mov edx, edi ; edx = high / 10
+                 ; eax = low / 10
+
+
+    pop ebx
+    pop edi
+    pop esi
+    pop ebp
+
+    ret
+
+
+
 ; int itoa(char * buf, int value, int flags, ...)
 ; eid = pointer to out buffer
 ; eax = value of be stored in buffer
