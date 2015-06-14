@@ -2,7 +2,7 @@
 #include <string.h>
 
 extern void hw_sprintf(char* out, char* const format, ...);
-extern void itoa(char * buf, int value, int flags, ...);
+extern int itoa(char * buf, int value, int flags, ...);
 
 static int args[5];
 static int SIGN = 1 << 0;
@@ -205,6 +205,15 @@ int main() {
 	args[2] = ALIGN;
 	args[3] = ZERO;
 	args[4] = WIDTH;
+
+	char buf[100];
+	// int a = itoa(buf, 123, 0);
+	// printf("%i", a);
+	// buf[a] = 0;
+	// printf("\"%s\"\n", buf);
+	// unsigned long long int value = 1234567890123456ll;
+	hw_sprintf(buf, "%015u", -1234);
+	printf("\"%s\"\n", buf);
 
 	// do_itoa_testing();
 	// do_sprintf_testing();

@@ -10,8 +10,9 @@ zero_flag    equ   1 << 3 ; fill 0 up to min width 8
 width_flag   equ   1 << 4 ; 16
 percent_flag equ   1 << 5 ; if percent sign is present 32
 negative_flag equ  1 << 6 ; if number if negative 64
+unsigned_flag equ  1 << 7 ; if value is unsigned
 
-; void sitoa(char * buf, int value, int flags, ...)
+; int itoa(char * buf, int value, int flags, ...)
 ; eid = pointer to out buffer
 ; eax = value of be stored in buffer
 ; ebp = flags value
@@ -23,8 +24,12 @@ itoa:
     push ebx
 
     mov edi, [esp + 20] ; edi = buf
+    mov esi, edi
     mov eax, [esp + 24] ; eax = value
     mov ebp, [esp + 28] ; ebp = flags
+
+    test ebp, unsigned_flag
+    jnz .main
 
     test eax, 0x80000000 ; check for negative value
     je .main
@@ -154,11 +159,14 @@ itoa:
         ; mov byte [edi], 0
         ; inc edi
         ; return registers back
+        sub esi, edi
+        xor eax, eax
+        sub eax, esi
+
         pop ebx
         pop edi
         pop esi
         pop ebp
-
         ret
 
 ; void hw_sprintf(char* out, char* format, arguments...)
@@ -249,15 +257,26 @@ hw_sprintf:
 
         cmp cl, 'd'
         je .print_int
-        jne .simple_output
+
+        cmp cl, 'u'
+        jne .no_type
+
+        or edx, unsigned_flag
+        jmp .print_int
+
+    .no_type:
+        jmp .simple_output
 
     .print_int:
         push ebx
         push edx
         push dword [ebp]
         push edi
+
         call itoa
-        add esp, 16 ; clear arguments
+        ; eax = new edi
+        add edi, eax
+        add esp, 16
 
 
         ; clean flags and move pointer to next
@@ -318,7 +337,7 @@ hw_sprintf:
         cmp cl, 0
         jne .next_character
 
-        mov byte [edi], '0'
+        mov byte [edi], 0
         inc edi
         ; pop callee-save registers
         pop ebx
