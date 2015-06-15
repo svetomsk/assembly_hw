@@ -3,16 +3,17 @@ global itoa
 
 section .text
 
-plus_flag    equ   1 << 0 ; always print sign before number 1
-space_flag   equ   1 << 1 ; always print space before number 2
-align_flag   equ   1 << 2 ; align left 4 
-zero_flag    equ   1 << 3 ; fill 0 up to min width 8
-width_flag   equ   1 << 4 ; 16
-percent_flag equ   1 << 5 ; if percent sign is present 32
+plus_flag     equ  1 << 0 ; always print sign before number 1
+space_flag    equ  1 << 1 ; always print space before number 2
+align_flag    equ  1 << 2 ; align left 4 
+zero_flag     equ  1 << 3 ; fill 0 up to min width 8
+width_flag    equ  1 << 4 ; 16
+percent_flag  equ  1 << 5 ; if percent sign is present 32
 negative_flag equ  1 << 6 ; if number if negative 64
 unsigned_flag equ  1 << 7 ; if value is unsigned
+long_flag     equ  1 << 8 ; if value if value has long long spesificator
 
-; void reminder(long long int value, int devisor)
+; void reminder(long long int value)
 ; result: value / 10 in edx : eax; reminder in ecx
 
 reminder:
@@ -21,8 +22,8 @@ reminder:
     push edi
     push ebx
 
-    mov eax, [esp + 20] ; low 32 bits of value
-    mov edx, [esp + 24] ; high 32 bits of value
+    mov edx, [esp + 20] ; low 32 bits of value
+    mov eax, [esp + 24] ; high 32 bits of value
     mov ebx, 10 ; ebx= divisor
 
     mov ecx, eax
@@ -37,7 +38,7 @@ reminder:
 
     mov ecx, edx ; ecx = reminder
     mov edx, edi ; edx = high / 10
-                 ; eax = low / 10
+                 ; eax = high % 10 low / 10
 
 
     pop ebx
@@ -62,24 +63,61 @@ itoa:
 
     mov edi, [esp + 20] ; edi = buf
     mov esi, edi
-    mov eax, [esp + 24] ; eax = value
-    mov ebp, [esp + 28] ; ebp = flags
+    mov ebp, [esp + 24] ; ebp = flags
+    mov eax, [esp + 28] ; eax = low 32 bits
 
+    test ebp, long_flag
+    jz .test_neg_32
+    mov edx, [esp + 32]; edx = high 32 bits 
+    
     test ebp, unsigned_flag
     jnz .main
 
-    test eax, 0x80000000 ; check for negative value
+    test edx, 0x80000000
     je .main
-    neg eax
     or ebp, negative_flag
     or ebp, plus_flag
     xor ebp, space_flag
 
+    not edx
+    not eax
+    inc eax
+    jmp .main
+
+    .test_neg_32:
+        test ebp, unsigned_flag
+        jnz .main
+        test eax, 0x80000000 ; check for negative value
+        je .main
+        neg eax
+        or ebp, negative_flag
+        or ebp, plus_flag
+        xor ebp, space_flag
+
     .main:
-        mov ebx, 10 ; ebx = divisor
-        mov ecx, esp ; save old esp value
+        mov ebx, esp ; save old esp value
+
+        ; test for long long int type and push value to stack
+        ; if it's true
+        test ebp, long_flag
+        jz .div_circle
+
+        .long_div_circle:
+            push eax
+            push edx
+            call reminder
+            add esp, 8
+            ; ecx = reminder
+            dec esp
+            add ecx, '0'
+            mov byte[esp], cl
+            cmp edx, 0
+            jne .long_div_circle
+
+        mov ecx, ebx
 
         .div_circle: ; div until eax != 0
+            mov ebx, 10 ; ebx = divisor
             xor edx, edx ; edx = 0
             div ebx; eax / ebx
             add edx, '0'; edx = '0' + last digit of eax
@@ -93,7 +131,12 @@ itoa:
             xor ebx, ebx ; clear register for width
             test ebp, width_flag
             jz .sub_length
+            test ebp, long_flag
+            jnz .width_long
             mov ebx, [ecx + 32] ;ebx = width
+
+        .width_long: ; if width parameter is set with long long value
+            mov ebx, [ecx + 36]
 
         .sub_length:
             sub ecx, esp ; ecx = length of number
@@ -268,12 +311,12 @@ hw_sprintf:
         .width_read:
             cmp cl, '0' ; check if cl >= '0'
             jge .is_lower ; if true check lower bound
-            jl .type_check
+            jl .size_check
 
         .is_lower:
             cmp cl, '9' ; check if cl <= '9'
             jle .read_digit ; if true read digit
-            jg .type_check
+            jg .size_check
 
         .read_digit:
             or edx, width_flag ; set width flag
@@ -285,6 +328,20 @@ hw_sprintf:
             mov cl, byte [esi] ; read next character
             inc esi
             jmp .width_read
+
+    .size_check:
+        cmp cl, 'l'
+        jne .type_check
+        mov cl, byte [esi]
+        inc esi
+        cmp cl, 'l'
+        je .set_long_flag
+        jne .print_until_percent
+
+    .set_long_flag:
+        or edx, long_flag
+        mov cl, byte [esi]
+        inc esi
 
     ; check for type input
     .type_check:
@@ -305,22 +362,41 @@ hw_sprintf:
         jmp .simple_output
 
     .print_int:
-        push ebx
-        push edx
-        push dword [ebp]
-        push edi
+        push ebx ; ebx = width
+
+        test edx, long_flag
+        jz .continue
+
+        push dword [ebp + 4] ; low 32 bits
+        push dword [ebp]     ; high 32 bits
+
+        add ebp, 4
+        jmp .call_itoa
+
+    .continue:
+        push dword [ebp] ; low 32 bits
+
+    .call_itoa:
+        push edx ; edx = flags
+        push edi ; buffer pointer
 
         call itoa
+
+        pop edi
+        pop edx
         ; eax = new edi
         add edi, eax
-        add esp, 16
-
+        test edx, long_flag
+        jz .clear_args
+        add esp, 4
+    .clear_args:
+        add esp, 8
 
         ; clean flags and move pointer to next
         ; argument
         xor edx, edx
         add ebp, 4
-        jmp .finally
+        jmp .next_character
 
 
     .simple_output:
@@ -356,6 +432,7 @@ hw_sprintf:
         dec esp
         cmp al, '%'
         jne .push_until_percent
+
         inc esp
         ; reverse data and put to
         ; out buffer
